@@ -1,0 +1,35 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Jupyter notebook checkpoints (if any)
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs and temp
+*.log
+*.tmp
+
+
+
+# IDE files
+.vscode/
+.idea/
+
+# Render deploy artifacts (optional)
+render.yaml
+
+# Ignore any hidden OS or Python artifacts
+*.egg-info/
+.eggs/
+.build/

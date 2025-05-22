@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Emo! - Emotion Prediction</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <img class="image-gradient" src="{{ url_for('static', filename='gradient.jpg') }}" alt="gradient" />
+  <div class="layer-blur"></div>
+
+  <div class="container">
+    <header>
+      <h1 class="logo">Emo!</h1>
+    </header>
+
+    <main>
+      <div class="content">
+        <h1 class="one-line-heading">
+          Decode Emotions Instantly — AI that reads between lines!!
+        </h1>
+
+        <div class="prediction-section">
+          <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".csv" required />
+            <button type="submit" class="btn-predict">Predict</button>
+          </form>
+
+          {% if predictions %}
+          <div class="result-container">
+            <div class="predictions-list">
+              <h2>Top 10 Predictions</h2>
+              <ol>
+                {% for p in predictions %}
+                <li>{{ p }}</li>
+                {% endfor %}
+              </ol>
+            </div>
+
+            {% if labels and counts %}
+            <div class="chart-container">
+              <h2>Emotion Distribution (Percentages)</h2>
+              <canvas id="emotionChart"></canvas>
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="robot-container">
+        <spline-viewer
+          class="robot-3d"
+          url="https://prod.spline.design/ybzOFJtdXwq-E-It/scene.splinecode"
+        ></spline-viewer>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.92/build/spline-viewer.js"></script>
+
+  {% if labels and counts %}
+  <script>
+    const ctx = document.getElementById('emotionChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: {{ labels | tojson }},
+        datasets: [{
+          label: 'Emotion Percentage',
+          data: {{ counts | tojson }},
+          backgroundColor: ['#ff6666', '#ffd966', '#66b3ff'],
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        animation: {
+          animateRotate: true,
+          duration: 2000
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                return context.label + ': ' + context.parsed.toFixed(1) + '%';
+              },
+            },
+          },
+        },
+      },
+    });
+  </script>
+  {% endif %}
+</body>
+</html>
