@@ -4,6 +4,7 @@ import numpy as np
 import joblib
 from tensorflow.keras.models import load_model
 from collections import Counter
+import traceback
 
 app = Flask(__name__)
 
@@ -30,8 +31,15 @@ def index():
         file = request.files['file']
         if file and file.filename.endswith('.csv'):
             try:
-                # Read uploaded CSV and extract FFT features
-                df = pd.read_csv(file)
+                # Read only first 50 rows to avoid timeout
+                df = pd.read_csv(file).iloc[:50]
+
+                # Check all required FFT columns exist
+                required_columns = [f'fft_{i}_b' for i in range(750)]
+                missing_cols = [col for col in required_columns if col not in df.columns]
+                if missing_cols:
+                    raise ValueError(f"Missing required FFT columns: {missing_cols}")
+
                 X = df.loc[:, 'fft_0_b':'fft_749_b'].values
                 X_scaled = scaler.transform(X)
                 X_input = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
@@ -55,6 +63,8 @@ def index():
                 counts = [round((label_counts[l] / total_top10) * 100, 2) for l in labels]
 
             except Exception as e:
+                # Log full traceback in server logs for debugging
+                print(traceback.format_exc())
                 predictions = [f"Error: {str(e)}"]
                 actual_vs_pred = []
                 labels = []
