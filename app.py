@@ -4,21 +4,33 @@ import numpy as np
 import joblib
 from tensorflow.keras.models import load_model
 from collections import Counter
-import traceback
+from functools import lru_cache
+import os
 
 app = Flask(__name__)
 
-# Load model and preprocessing tools
-model = load_model('gru_emotion_model_v3.h5')
-scaler = joblib.load('scaler.pkl')
-encoder = joblib.load('encoder.pkl')
+# Lazy loading of model to reduce memory at startup
+@lru_cache(maxsize=1)
+def get_model():
+    return load_model('gru_emotion_model_v3.h5')
 
-# Load the original dataset with labels
-train_df = pd.read_csv('emotions.csv')
-if 'label' not in train_df.columns:
-    raise KeyError("The 'emotions.csv' file must contain a 'label' column.")
+@lru_cache(maxsize=1)
+def get_scaler():
+    return joblib.load('scaler.pkl')
 
-train_labels = train_df['label'].values
+@lru_cache(maxsize=1)
+def get_encoder():
+    return joblib.load('encoder.pkl')
+
+# Load train labels only once
+train_labels = None
+if os.path.exists('emotions.csv'):
+    train_df = pd.read_csv('emotions.csv', nrows=10)
+    if 'label' not in train_df.columns:
+        raise KeyError("The 'emotions.csv' file must contain a 'label' column.")
+    train_labels = train_df['label'].values
+else:
+    raise FileNotFoundError("emotions.csv not found.")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -31,44 +43,34 @@ def index():
         file = request.files['file']
         if file and file.filename.endswith('.csv'):
             try:
-                # Read only first 50 rows to avoid timeout
-                df = pd.read_csv(file).iloc[:50]
-
-                # Check all required FFT columns exist
-                required_columns = [f'fft_{i}_b' for i in range(750)]
-                missing_cols = [col for col in required_columns if col not in df.columns]
-                if missing_cols:
-                    raise ValueError(f"Missing required FFT columns: {missing_cols}")
-
+                # Read first 10 rows for performance
+                df = pd.read_csv(file, nrows=10)
                 X = df.loc[:, 'fft_0_b':'fft_749_b'].values
+
+                scaler = get_scaler()
+                encoder = get_encoder()
+                model = get_model()
+
                 X_scaled = scaler.transform(X)
                 X_input = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
 
-                # Predict with GRU model
+                # Predict
                 y_pred = model.predict(X_input)
-                predicted_labels_all = encoder.inverse_transform(np.argmax(y_pred, axis=1))
+                predicted_labels = encoder.inverse_transform(np.argmax(y_pred, axis=1))
+                predictions = predicted_labels.tolist()
 
-                # Limit to first 10 predictions
-                top10_predicted = predicted_labels_all[:10]
-                predictions = top10_predicted.tolist()
-
-                # Actual labels for comparison (optional)
-                actual_labels = train_labels[:10]
+                # Actual labels for comparison
+                actual_labels = train_labels[:len(predictions)]
                 actual_vs_pred = list(zip(actual_labels, predictions))
 
-                # Count distribution of top 10 predicted values
-                label_counts = Counter(top10_predicted)
-                total_top10 = sum(label_counts.values())
+                # Count distribution
+                label_counts = Counter(predicted_labels)
+                total = sum(label_counts.values())
                 labels = list(label_counts.keys())
-                counts = [round((label_counts[l] / total_top10) * 100, 2) for l in labels]
+                counts = [round((label_counts[l] / total) * 100, 2) for l in labels]
 
             except Exception as e:
-                # Log full traceback in server logs for debugging
-                print(traceback.format_exc())
                 predictions = [f"Error: {str(e)}"]
-                actual_vs_pred = []
-                labels = []
-                counts = []
 
     return render_template('index.html',
                            predictions=predictions,
